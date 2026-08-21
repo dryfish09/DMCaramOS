@@ -9,7 +9,8 @@ tlp
 #19
 copyq
 copyq-doc
-tlp-rw
+tlp-rdw
+network-manager
 gimp
 gnome-sushi
 peek
@@ -26,3 +27,4 @@ remmina
 vim
 neovim
 docker.io
+gh
