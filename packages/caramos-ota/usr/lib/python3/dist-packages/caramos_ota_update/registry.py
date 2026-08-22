@@ -168,9 +168,9 @@ def _descriptor(directory: Path) -> MigrationDescriptor:
     raw = _read_json(manifest_path)
     schema = raw.get("schema")
 
-    if TIMESTAMP_ID_RE.fullmatch(migration_id):
-        if schema != 2:
-            raise MigrationRegistryError(f"timestamp migration {migration_id} requires manifest schema 2")
+    # Allow any directory name, but validate based on schema
+    if schema == 2:
+        # Timestamp migration (schema 2)
         forbidden = sorted({"release", "version", "from_version", "to_version"}.intersection(raw))
         if forbidden:
             raise MigrationRegistryError(
@@ -183,16 +183,15 @@ def _descriptor(directory: Path) -> MigrationDescriptor:
             raise MigrationRegistryError(f"timestamp migration {migration_id} is missing migration.py")
         from_version = None
         to_version = None
-    elif LEGACY_ID_RE.fullmatch(migration_id):
-        if schema != 1:
-            raise MigrationRegistryError(f"legacy migration {migration_id} requires manifest schema 1")
+    elif schema == 1:
+        # Legacy migration (schema 1)
         release = _required_string(raw, "version", manifest_path)
         from_version = _required_string(raw, "from_version", manifest_path)
         to_version = release
         module_path = _legacy_module_path(directory)
     else:
         raise MigrationRegistryError(
-            f"invalid migration directory {migration_id!r}; expected vX_Y_Z or YYYYMMDDHHMMSS_name"
+            f"migration {migration_id} has unsupported schema {schema}; expected 1 or 2"
         )
 
     if release is not None and not VERSION_RE.fullmatch(release):
@@ -261,11 +260,7 @@ def discover_migrations(root: Path | None = None) -> list[MigrationDescriptor]:
         entries = [entry for entry in child.iterdir() if entry.name != "__pycache__"]
         if not entries:
             continue
-        if not (LEGACY_ID_RE.fullmatch(child.name) or TIMESTAMP_ID_RE.fullmatch(child.name)):
-            raise MigrationRegistryError(
-                f"invalid directory in migration root: {child.name!r}; "
-                "only vX_Y_Z and YYYYMMDDHHMMSS_name are allowed"
-            )
+        # Allow any directory name - just validate the schema inside
         descriptors.append(_descriptor(child))
 
     if not descriptors:
