@@ -12,6 +12,14 @@ LEGACY_SOURCE_FILE="/etc/apt/sources.list.d/caramos-ppa.list"
 RELEASE_FILE="/etc/caramos-release"
 TMP_GNUPG_HOME=""
 
+# Multiple keyservers to try (in order of preference)
+KEYSERVERS=(
+    "hkps://keyserver.ubuntu.com"
+    "hkps://keys.openpgp.org"
+    "hkps://pgp.mit.edu"
+    "http://keyserver.ubuntu.com"
+)
+
 info() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 ok() { printf '\033[1;32mOK\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mWARN\033[0m %s\n' "$*"; }
@@ -84,6 +92,23 @@ cleanup_conflicting_ppa_sources() {
   ok "Cleaned duplicate sources"
 }
 
+import_key_from_keyserver() {
+  local keyserver="$1"
+  local success=false
+  
+  if GNUPGHOME="${TMP_GNUPG_HOME}" gpg --batch --keyserver "$keyserver" --recv-keys "${PPA_KEY_FPR}" 2>/dev/null; then
+    if GNUPGHOME="${TMP_GNUPG_HOME}" gpg --batch --list-keys "${PPA_KEY_FPR}" >/dev/null 2>&1; then
+      success=true
+    fi
+  fi
+  
+  if $success; then
+    return 0
+  else
+    return 1
+  fi
+}
+
 install_keyring() {
   info "Updating CaramOS Launchpad PPA keyring..."
   mkdir -p "${KEYRING_DIR}"
@@ -101,12 +126,24 @@ install_keyring() {
 
   TMP_GNUPG_HOME="$(mktemp -d)"
   chmod 0700 "${TMP_GNUPG_HOME}"
+
+  local import_success=false
   
-  # Use hkps:// for secure keyserver communication
-  if ! GNUPGHOME="${TMP_GNUPG_HOME}" gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "${PPA_KEY_FPR}"; then
-    # Fallback to http if hkps fails (some networks block hkps)
-    warn "hkps:// keyserver failed, trying http:// keyserver..."
-    GNUPGHOME="${TMP_GNUPG_HOME}" gpg --batch --keyserver http://keyserver.ubuntu.com --recv-keys "${PPA_KEY_FPR}"
+  for keyserver in "${KEYSERVERS[@]}"; do
+    info "  → Trying keyserver: $keyserver"
+    if import_key_from_keyserver "$keyserver"; then
+      ok "  → Key imported from: $keyserver"
+      import_success=true
+      break
+    else
+      warn "  → Failed to import from: $keyserver"
+    fi
+  done
+
+  if ! $import_success; then
+    fail "Failed to import PPA key from all keyservers"
+    fail "Tried: ${KEYSERVERS[*]}"
+    exit 1
   fi
   
   GNUPGHOME="${TMP_GNUPG_HOME}" gpg --batch --export "${PPA_KEY_FPR}" > "${KEYRING_FILE}.tmp"
@@ -186,7 +223,6 @@ launch_notifier() {
       if [[ -n "${user_home}" && -f "${user_home}/.Xauthority" ]]; then
         user_env+=("XAUTHORITY=${user_home}/.Xauthority")
       fi
-      # Use nohup to detach from script
       nohup runuser -u "${SUDO_USER}" -- env "${user_env[@]}" caramos-ota-notifier >/dev/null 2>&1 &
     else
       nohup caramos-ota-notifier >/dev/null 2>&1 &
