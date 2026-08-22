@@ -10,7 +10,7 @@ from pathlib import Path
 from caramos_ota_update.context import MigrationContext
 
 FROM_VERSION = "1.0.16.1"
-TO_VERSION = "dmcaram-1.1.0"
+TO_VERSION = "1.0.17"
 DESCRIPTION = "Apply CaramOS branding, Cinnamon Delight theme, Vietnamese locale, and desktop defaults"
 
 OS_RELEASE_PATH = Path("/usr/lib/os-release")
