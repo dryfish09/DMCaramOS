@@ -1,6 +1,6 @@
 #!/bin/bash
 # Hook: Theme + branding + cleanup
-set -e
+set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 APT_LOCK_TIMEOUT="${APT_LOCK_TIMEOUT:-600}"
 APT_GET=(apt-get -o DPkg::Lock::Timeout="${APT_LOCK_TIMEOUT}")
@@ -8,6 +8,18 @@ CARAMOS_VERSION="${CARAMOS_VERSION:-0.1}"
 MINT_EDITION="${MINT_EDITION:-cinnamon}"
 CARAMOS_EDITION="${MINT_EDITION^}"
 CARAMOS_PRETTY_NAME="CaramOS ${CARAMOS_VERSION} ${CARAMOS_EDITION}"
+
+log() {
+    local level="$1"
+    shift
+    case "$level" in
+        info)  printf '\033[1;34m[CaramOS]\033[0m %s\n' "$*" ;;
+        warn)  printf '\033[1;33m[CaramOS][WARN]\033[0m %s\n' "$*" >&2 ;;
+        error) printf '\033[1;31m[CaramOS][ERROR]\033[0m %s\n' "$*" >&2 ;;
+        ok)    printf '\033[1;32m[CaramOS][OK]\033[0m %s\n' "$*" ;;
+        *)     printf '[CaramOS] %s\n' "$*" ;;
+    esac
+}
 
 preseed_fonts_eula() {
     echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections || true
@@ -35,6 +47,276 @@ HOME_URL="https://caramos.org/"
 SUPPORT_URL="https://caramos.org/"
 BUG_REPORT_URL="https://caramos.org/"
 PRIVACY_POLICY_URL="https://caramos.org/"
+UBUNTU_CODENAME=noble
+OSREL
+    cat /tmp/caramos-os-release > /usr/lib/os-release
+    cat /tmp/caramos-os-release > /etc/os-release
+    rm -f /tmp/caramos-os-release
+}
+
+log info "Preparing noninteractive apt..."
+preseed_fonts_eula
+disable_package_data_downloads
+"${APT_GET[@]}" update -qq
+"${APT_GET[@]}" install -y --no-install-recommends unzip wget curl ca-certificates file xz-utils fontconfig cabextract || true
+
+log info "Installing Google Chrome..."
+CHROME_DEB="/tmp/google-chrome.deb"
+if wget -q -O "$CHROME_DEB" "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"; then
+    if file "$CHROME_DEB" | grep -q "Debian"; then
+        "${APT_GET[@]}" install -y "$CHROME_DEB" || "${APT_GET[@]}" install -f -y
+        rm -f "$CHROME_DEB"
+        log ok "Google Chrome installed"
+    else
+        log warn "Downloaded file is not a valid .deb package"
+        rm -f "$CHROME_DEB"
+    fi
+else
+    log warn "Could not download Google Chrome"
+fi
+
+log info "Using Cinnamon Delight theme; ChromeOS theme intentionally not installed."
+
+log info "Installing Tela circle icons..."
+TELA_ZIP="/tmp/tela-icons.zip"
+if wget -q -O "$TELA_ZIP" "https://github.com/vinceliuice/Tela-circle-icon-theme/archive/refs/heads/master.zip"; then
+    if file "$TELA_ZIP" | grep -q "Zip"; then
+        if unzip -qo "$TELA_ZIP" -d /tmp/; then
+            cd /tmp/Tela-circle-icon-theme-master
+            ./install.sh -a || log warn "Tela icon install script failed"
+            cd /
+            log ok "Tela icons installed"
+        fi
+    else
+        log warn "Downloaded Tela file is not a valid ZIP"
+    fi
+    rm -rf "$TELA_ZIP" /tmp/Tela-circle-icon-theme-master
+else
+    log warn "Could not download Tela icons"
+fi
+
+log info "Installing Bibata cursor..."
+BIBATA_VER="2.0.6"
+BIBATA_URL="https://github.com/ful1e5/Bibata_Cursor/releases/download/v${BIBATA_VER}/Bibata-Modern-Classic.tar.xz"
+if wget -q -O /tmp/bibata.tar.xz "$BIBATA_URL"; then
+    if file /tmp/bibata.tar.xz | grep -q "XZ"; then
+        mkdir -p /usr/share/icons
+        if tar -xf /tmp/bibata.tar.xz -C /usr/share/icons/; then
+            log ok "Bibata cursor installed"
+        else
+            log warn "Failed to extract Bibata cursor"
+        fi
+    else
+        log warn "Downloaded Bibata file is not valid XZ archive"
+    fi
+    rm -f /tmp/bibata.tar.xz
+else
+    log warn "Could not download Bibata cursor"
+fi
+
+log info "Installing Be Vietnam Pro font..."
+mkdir -p /usr/share/fonts/truetype/be-vietnam-pro
+if wget -q -O /tmp/be-vietnam-pro.zip "https://github.com/bettergui/BeVietnamPro/archive/refs/heads/master.zip"; then
+    if file /tmp/be-vietnam-pro.zip | grep -q "Zip"; then
+        mkdir -p /tmp/be-vietnam-pro-extract
+        if unzip -qo /tmp/be-vietnam-pro.zip -d /tmp/be-vietnam-pro-extract/; then
+            FONT_COUNT=$(find /tmp/be-vietnam-pro-extract/ -name "*.ttf" -type f | wc -l)
+            if [ "$FONT_COUNT" -gt 0 ]; then
+                find /tmp/be-vietnam-pro-extract/ -name "*.ttf" -exec cp {} /usr/share/fonts/truetype/be-vietnam-pro/ \;
+                fc-cache -f || true
+                log ok "Installed $FONT_COUNT font files"
+            else
+                log warn "No .ttf files found in Be Vietnam Pro archive"
+            fi
+        fi
+        rm -rf /tmp/be-vietnam-pro-extract
+    else
+        log warn "Downloaded Be Vietnam Pro file is not a valid ZIP"
+    fi
+    rm -f /tmp/be-vietnam-pro.zip
+else
+    log warn "Could not download Be Vietnam Pro font"
+fi
+
+log info "Setting Vietnamese locale and timezone..."
+if ! grep -q "^vi_VN.UTF-8 UTF-8" /etc/locale.gen; then
+    echo "vi_VN.UTF-8 UTF-8" >> /etc/locale.gen
+fi
+sed -i 's/^# vi_VN.UTF-8 UTF-8/vi_VN.UTF-8 UTF-8/' /etc/locale.gen
+if locale-gen; then
+    cat > /etc/default/locale <<'LOCALE'
+LANG=vi_VN.UTF-8
+LANGUAGE=vi_VN:vi
+LC_ALL=vi_VN.UTF-8
+LOCALE
+    log ok "Locale set to vi_VN.UTF-8"
+else
+    log warn "locale-gen failed, using default locale"
+fi
+
+ln -snf /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime
+printf 'Asia/Ho_Chi_Minh\n' > /etc/timezone
+if command -v timedatectl >/dev/null 2>&1; then
+    timedatectl set-timezone Asia/Ho_Chi_Minh 2>/dev/null || true
+fi
+printf 'caram\n' > /etc/hostname
+sed -i 's/\bmint\b/caram/gI' /etc/hosts 2>/dev/null || true
+
+write_os_release
+cat > /etc/lsb-release <<LSB
+DISTRIB_ID=CaramOS
+DISTRIB_RELEASE=${CARAMOS_VERSION}
+DISTRIB_CODENAME=caram
+DISTRIB_DESCRIPTION="${CARAMOS_PRETTY_NAME}"
+LSB
+mkdir -p /etc/linuxmint
+cat > /etc/linuxmint/info <<MINTINFO
+RELEASE=${CARAMOS_VERSION}
+CODENAME=caram
+EDITION="${CARAMOS_EDITION}"
+DESCRIPTION="${CARAMOS_PRETTY_NAME}"
+DESKTOP=Gnome
+TOOLKIT=GTK
+NEW_FEATURES_URL=https://caramos.org/
+RELEASE_NOTES_URL=https://caramos.org/
+USER_GUIDE_URL=https://caramos.org/
+GRUB_TITLE=${CARAMOS_PRETTY_NAME}
+MINTINFO
+printf 'CaramOS %s \\n \\l\n' "$CARAMOS_VERSION" > /etc/issue
+printf 'CaramOS %s\n' "$CARAMOS_VERSION" > /etc/issue.net
+find /usr/share/distro-info -type f -name '*.csv' -print0 2>/dev/null | \
+    xargs -0 -r sed -i -e 's/Linux Mint/CaramOS/gI' -e 's/linuxmint/caramos/gI' 2>/dev/null || true
+log ok "OS identity files written"
+
+log info "Removing LibreOffice and bloatware..."
+"${APT_GET[@]}" remove -y 'libreoffice*' thunderbird hexchat drawing hypnotix rhythmbox 2>/dev/null || true
+"${APT_GET[@]}" purge -y 'libreoffice*' 2>/dev/null || true
+"${APT_GET[@]}" autoremove -y || true
+log ok "Bloatware removed"
+
+log info "Applying desktop branding defaults..."
+mkdir -p /usr/share/applications /usr/share/pixmaps /usr/share/icons/hicolor/scalable/apps
+cat > /usr/share/applications/ubiquity.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install CaramOS
+Name[vi]=Cài đặt CaramOS
+Comment=Install CaramOS permanently to your disk
+Comment[vi]=Cài đặt CaramOS vào ổ đĩa
+Keywords=ubiquity;installer;caramos;
+Exec=sudo --preserve-env=DBUS_SESSION_BUS_ADDRESS,XDG_DATA_DIRS,XDG_RUNTIME_DIR,GTK_THEME sh -c 'WEBKIT_DISABLE_COMPOSITING_MODE=1 ubiquity gtk_ui'
+Icon=caramos-logo
+Terminal=false
+Categories=GTK;System;Settings;
+X-Ayatana-Appmenu-Show-Stubs=False
+DESKTOP
+
+if [ -f /usr/share/pixmaps/caramos-logo.png ]; then
+    cp -f /usr/share/pixmaps/caramos-logo.png /usr/share/pixmaps/mintubiquity.png
+fi
+if [ -f /usr/share/icons/hicolor/scalable/apps/caramos-logo.svg ]; then
+    cp -f /usr/share/icons/hicolor/scalable/apps/caramos-logo.svg \
+        /usr/share/icons/hicolor/scalable/apps/linuxmint-logo-ring-symbolic.svg
+fi
+
+if [ -f /usr/share/glib-2.0/schemas/mint-artwork.gschema.override ]; then
+    sed -i \
+        -e "s|Mint-Y-Dark-Aqua|Cinnamon-Delight|g" \
+        -e "s|Mint-Y-Dark|Cinnamon-Delight|g" \
+        -e "s|Mint-Y-Aqua|Cinnamon-Delight|g" \
+        -e "s|Mint-Y-Sand|Cinnamon-Delight|g" \
+        -e "s|/usr/share/backgrounds/linuxmint/default_background.jpg|/usr/share/backgrounds/caramos/default.png|g" \
+        -e "s|linuxmint-logo-ring-symbolic|caramos-logo-symbolic|g" \
+        /usr/share/glib-2.0/schemas/mint-artwork.gschema.override
+fi
+
+if [ -f /etc/lightdm/lightdm-gtk-greeter.conf.d/99_linuxmint.conf ]; then
+    sed -i \
+        -e "s|/usr/share/backgrounds/linuxmint/default_background.jpg|/usr/share/backgrounds/caramos/default.png|g" \
+        -e "s|Mint-Y-Aqua|Cinnamon-Delight|g" \
+        /etc/lightdm/lightdm-gtk-greeter.conf.d/99_linuxmint.conf
+fi
+
+mkdir -p /etc/dconf/profile /etc/dconf/db/local.d
+cat > /etc/dconf/profile/user <<'DCONFPROFILE'
+user-db:user
+system-db:local
+DCONFPROFILE
+
+PINNED_APPS="['google-chrome.desktop'"
+for app in "wps-office-prometheus.desktop" "zalo.desktop" "mintinstall.desktop" "cinnamon-settings.desktop"; do
+    if [ -f "/usr/share/applications/$app" ]; then
+        PINNED_APPS+=",'$app'"
+    else
+        log warn "Pinned app not found, skipping: $app"
+    fi
+done
+PINNED_APPS+="]"
+
+cat > /etc/dconf/db/local.d/00-caramos-theme <<DCONF
+[org/cinnamon]
+app-menu-icon-name='caramos-logo-symbolic'
+system-icon='caramos-logo-symbolic'
+
+[org/cinnamon/theme]
+name='Cinnamon-Delight'
+
+[org/cinnamon/desktop/interface]
+gtk-theme='Cinnamon-Delight'
+icon-theme='Tela-circle-light'
+cursor-theme='Bibata-Modern-Classic'
+font-name='Be Vietnam Pro 10'
+clock-show-date=true
+clock-use-24h=true
+
+[org/cinnamon/desktop/wm/preferences]
+theme='Cinnamon-Delight'
+
+[org/gnome/desktop/interface]
+gtk-theme='Cinnamon-Delight'
+icon-theme='Tela-circle-light'
+cursor-theme='Bibata-Modern-Classic'
+font-name='Be Vietnam Pro 10'
+
+[org/gnome/desktop/wm/preferences]
+theme='Cinnamon-Delight'
+
+[org/cinnamon/applets/grouped-window-list]
+pinned-apps=${PINNED_APPS}
+DCONF
+log ok "Desktop branding defaults written"
+
+if [ -f /usr/share/applications/nemo.desktop ] && ! grep -q '^StartupWMClass=' /usr/share/applications/nemo.desktop; then
+    printf '\nStartupWMClass=Nemo\n' >> /usr/share/applications/nemo.desktop
+fi
+if command -v dconf >/dev/null 2>&1; then
+    dconf update || log warn "dconf update failed"
+fi
+
+find /etc/skel /root -type f \( -name '.bashrc' -o -name '.profile' -o -name '*.conf' \) -print0 2>/dev/null | \
+    xargs -0 -r sed -i -e 's/mint@mint/caram@caram/gI' -e 's/\bmint\b/caram/gI' 2>/dev/null || true
+rm -f /etc/skel/.config/dconf/user 2>/dev/null || true
+
+if [ -f /usr/bin/caramos-theme-apply ]; then
+    chmod +x /usr/bin/caramos-theme-apply
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+fi
+
+log info "Compiling schemas..."
+if command -v glib-compile-schemas >/dev/null 2>&1; then
+    glib-compile-schemas /usr/share/glib-2.0/schemas/ || log warn "Schema compile failed"
+fi
+
+log info "Cleaning up..."
+"${APT_GET[@]}" clean
+rm -rf /tmp/*
+
+date -u +'%Y-%m-%dT%H:%M:%SZ' > /etc/caramos-customized
+
+log ok "Hook complete!"PRIVACY_POLICY_URL="https://caramos.org/"
 UBUNTU_CODENAME=noble
 OSREL
     cat /tmp/caramos-os-release > /usr/lib/os-release
