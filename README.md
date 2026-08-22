@@ -21,7 +21,7 @@ If you installed OS `.iso` file. Run this command:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dryfish09/DMCaramOS/refs/heads/main/install-caramos-ota.sh | sudo bash
 ```
-After, Open **CaramOS Update Center from start menu to start upgrade version.
+After, Open **CaramOS Update Center** from start menu to start upgrade version.
 ### Download ISO file:
 
 Due SourceForge problem (I'll find some place can archive and host `.iso` file, but not now). The ISO file will not on it. Go to Actions tab, click the latest success build attempt (with green checkmark), scroll to Artifacts section, download it.
