@@ -1,0 +1,113 @@
+{
+  "schema": 2,
+  "codename": "noble",
+  "channel": "stable",
+  "severity": "feature",
+  "size": "ota feature",
+  "title": "Cài đặt ứng dụng Zalo cho Linux",
+  "summary": "Cài đặt ứng dụng nhắn tin Zalo trên Linux sử dụng AppImage.",
+  "release_notes_vi": [
+    "Thêm ứng dụng nhắn tin Zalo cho Linux.",
+    "Tải và cài đặt Zalo AppImage phiên bản mới nhất.",
+    "Tạo shortcut trên desktop và menu ứng dụng cho tất cả người dùng.",
+    "Đăng ký MIME type để mở link Zalo từ trình duyệt.",
+    "Tự động gỡ bỏ phiên bản cũ nếu có."
+  ],
+  "release_notes_en": [
+    "Add Zalo messaging application for Linux.",
+    "Download and install Zalo AppImage latest version.",
+    "Create desktop and application menu shortcuts for all users.",
+    "Register MIME type to open Zalo links from browser.",
+    "Automatically remove old version if exists."
+  ],
+  "dependencies": {
+    "packages": ["wget", "file"],
+    "architecture": ["x86_64"],
+    "minimum_ram_mb": 1024,
+    "minimum_disk_mb": 500
+  },
+  "files": [
+    {
+      "source": "https://github.com/hthienloc/zalo-for-linux/releases/download/26.5.10/Zalo-26.5.10+ZaDark-26.2-5051532.AppImage",
+      "destination": "/usr/local/bin/Zalo-26.5.10.AppImage",
+      "permissions": "0755",
+      "type": "executable"
+    },
+    {
+      "source": "https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg",
+      "destination": "/usr/share/pixmaps/zalo.png",
+      "permissions": "0644",
+      "type": "icon"
+    }
+  ],
+  "symlinks": [
+    {
+      "source": "/usr/local/bin/Zalo-26.5.10.AppImage",
+      "target": "/usr/local/bin/Zalo.AppImage"
+    }
+  ],
+  "desktop_entries": [
+    {
+      "path": "/usr/share/applications/zalo.desktop",
+      "name": "Zalo",
+      "comment": "Ứng dụng nhắn tin Zalo cho Linux",
+      "exec": "/usr/local/bin/Zalo.AppImage --no-sandbox %u",
+      "icon": "/usr/share/pixmaps/zalo.png",
+      "categories": "Network;InstantMessaging;",
+      "mime_types": ["x-scheme-handler/zalo"]
+    }
+  ],
+  "mime_types": [
+    {
+      "type": "x-scheme-handler/zalo",
+      "description": "Zalo URL"
+    }
+  ],
+  "scripts": {
+    "pre_install": [
+      "test -f /usr/local/bin/Zalo.AppImage && rm -f /usr/local/bin/Zalo.AppImage",
+      "test -f /usr/share/applications/zalo.desktop && rm -f /usr/share/applications/zalo.desktop"
+    ],
+    "post_install": [
+      "update-desktop-database /usr/share/applications",
+      "update-mime-database /usr/share/mime"
+    ],
+    "verify": [
+      "test -f /usr/local/bin/Zalo-26.5.10.AppImage",
+      "test -x /usr/local/bin/Zalo-26.5.10.AppImage",
+      "test -L /usr/local/bin/Zalo.AppImage",
+      "test -f /usr/share/applications/zalo.desktop"
+    ]
+  },
+  "rollback": {
+    "files_to_remove": [
+      "/usr/local/bin/Zalo-26.5.10.AppImage",
+      "/usr/local/bin/Zalo.AppImage",
+      "/usr/share/applications/zalo.desktop",
+      "/usr/share/pixmaps/zalo.png",
+      "/usr/share/mime/packages/zalo.xml"
+    ],
+    "commands": [
+      "update-desktop-database /usr/share/applications",
+      "update-mime-database /usr/share/mime"
+    ]
+  },
+  "systemd": {
+    "services": [],
+    "timers": []
+  },
+  "security": {
+    "require_root": true,
+    "sandbox": "--no-sandbox",
+    "apparmor_profile": null,
+    "selinux_context": null
+  },
+  "testing": {
+    "tested_distros": ["Ubuntu 22.04", "Ubuntu 24.04", "Linux Mint 21"],
+    "tested_desktops": ["Cinnamon", "GNOME", "XFCE"],
+    "known_issues": [
+      "Cần `--no-sandbox` để chạy trên một số distro",
+      "Có thể cần cài đặt thêm thư viện: libfuse2"
+    ]
+  }
+}
