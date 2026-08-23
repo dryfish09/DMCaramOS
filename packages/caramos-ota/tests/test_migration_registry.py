@@ -80,7 +80,8 @@ class MigrationRegistryTests(unittest.TestCase):
         catalog = discover_migrations()
         descriptors = {item.migration_id: item for item in catalog}
 
-        self.assertEqual(15, len(catalog))
+        # Cập nhật từ 15 lên 16
+        self.assertEqual(16, len(catalog))
         self.assertNotIn("v1_0_13", descriptors)
         self.assertNotIn("v1_0_14", descriptors)
         self.assertEqual("1.0.12", latest_legacy_release(catalog))
@@ -92,6 +93,7 @@ class MigrationRegistryTests(unittest.TestCase):
                 "20260803120000_apply_three_dock_taskbar",
                 "20260804223346_change_default_wallpaper",
                 "20260805111120_update_taskbar_pins_cleanup_desktop",
+                "20260827063012_update_zalo_hook",
             ],
             timestamp_ids,
         )
@@ -119,6 +121,7 @@ class MigrationRegistryTests(unittest.TestCase):
                 "20260803120000_apply_three_dock_taskbar",
                 "20260804223346_change_default_wallpaper",
                 "20260805111120_update_taskbar_pins_cleanup_desktop",
+                "20260827063012_update_zalo_hook",
             ],
             [item.migration_id for item in plan.migrations],
         )
@@ -135,10 +138,12 @@ class MigrationRegistryTests(unittest.TestCase):
                 "20260715090258_install_control_center",
                 "20260803120000_apply_three_dock_taskbar",
                 "20260804223346_change_default_wallpaper",
+                "20260827063012_update_zalo_hook",  # Migration mới đã được applied
             },
             descriptors=catalog,
         )
 
+        # Chỉ còn migration chưa applied
         self.assertEqual(
             ["20260805111120_update_taskbar_pins_cleanup_desktop"],
             [item.migration_id for item in plan.migrations],
