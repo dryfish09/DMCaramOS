@@ -30,4 +30,10 @@ gnome-power-manager
 smartmontools
 smart-notifier
 linux-tools-generic
+nemo
+notepadqq
+bat
+fzf
+mint-dev-tools
+
 
