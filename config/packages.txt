@@ -35,5 +35,3 @@ notepadqq
 bat
 fzf
 mint-dev-tools
-
-
